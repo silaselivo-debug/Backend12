@@ -10,10 +10,50 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/luct-college';
 
+// CORS Configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://iwb-liard.vercel.app',
+  'https://iwb-server.onrender.com',
+  'http://localhost:5174',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://your-production-domain.com' // Add your production domain
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin'
+  ],
+  optionsSuccessStatus: 200
+};
+
+// Trust proxy for deployment platforms
+app.set('trust proxy', 1);
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 // MongoDB Connection
 mongoose.connect(MONGODB_URI, {
@@ -22,6 +62,8 @@ mongoose.connect(MONGODB_URI, {
 })
 .then(() => console.log('✅ MongoDB connected successfully'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// ... rest of your code remains the same (all the schemas, routes, etc.)
 
 // MongoDB Schemas and Models
 
