@@ -7,17 +7,107 @@ const mongoose = require("mongoose")
 
 const app = express()
 const PORT = process.env.PORT || 5000
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/timetable-system"
+const NODE_ENV = process.env.NODE_ENV || "development"
+const MONGODB_URI = process.env.MONGODB_URI
 
-// Middleware
-app.use(cors())
+// CORS Configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true)
+    
+    // In development, allow common localhost origins
+    if (NODE_ENV === "development") {
+      const allowedDevOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+        'http://localhost:5000',
+        'http://127.0.0.1:5000'
+      ]
+      
+      if (allowedDevOrigins.indexOf(origin) !== -1 || origin.includes('://localhost') || origin.includes('://127.0.0.1')) {
+        return callback(null, true)
+      }
+    }
+    
+    // In production, you would add your specific domains here
+    // For now, allowing all origins in development for testing
+    if (NODE_ENV === "development") {
+      callback(null, true)
+    } else {
+      // Production - restrict to specific domains
+      const allowedProdOrigins = [
+        'https://yourdomain.com',
+        'https://www.yourdomain.com'
+        // Add your production domains here
+      ]
+      
+      if (allowedProdOrigins.indexOf(origin) !== -1) {
+        callback(null, true)
+      } else {
+        console.log('Blocked by CORS:', origin)
+        callback(new Error('Not allowed by CORS'))
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: [
+    'Content-Range',
+    'X-Content-Range'
+  ],
+  maxAge: 86400,
+  optionsSuccessStatus: 204
+}
+
+// Middleware - Apply CORS to all routes
+app.use(cors(corsOptions))
+
+// No need for separate app.options('*') - cors middleware handles preflight automatically
+
 app.use(bodyParser.json())
 
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => console.log("Connected to MongoDB successfully"))
-  .catch((err) => console.error("MongoDB connection error:", err))
+// Add security headers middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*')
+  res.header('Access-Control-Allow-Credentials', 'true')
+  next()
+})
 
+// MongoDB connection with better error handling
+mongoose
+  .connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("Connected to MongoDB Atlas successfully"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err)
+    process.exit(1)
+  })
+
+// MongoDB connection events
+mongoose.connection.on('error', err => {
+  console.error('MongoDB connection error:', err)
+})
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected')
+})
+
+// Your existing schemas and routes remain the same...
 const timetableSchema = new mongoose.Schema({
   program: { type: String, required: true },
   level: String,
@@ -101,6 +191,7 @@ const LecturerReport = mongoose.model("LecturerReport", lecturerReportSchema)
 const ProgramLeaderFeedback = mongoose.model("ProgramLeaderFeedback", programLeaderFeedbackSchema)
 const PrincipalLecturerFeedback = mongoose.model("PrincipalLecturerFeedback", principalLecturerFeedbackSchema)
 
+// Your existing API routes remain exactly the same...
 app.post("/api/timetables", async (req, res) => {
   try {
     const { program, level, year, semester, week, day, time, course, lecturer, code } = req.body
@@ -476,6 +567,7 @@ app.get("/api/principal-lecturer/feedback", async (req, res) => {
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "Server is running",
+    environment: NODE_ENV,
     database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     timestamp: new Date().toISOString(),
   })
@@ -484,7 +576,13 @@ app.get("/api/health", (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)
-  console.log(`MongoDB URI: ${MONGODB_URI}`)
+  console.log(`Environment: ${NODE_ENV}`)
+  console.log(`MongoDB URI: ${MONGODB_URI ? 'Connected to MongoDB Atlas' : 'Not configured'}`)
+  console.log(`CORS Configuration:`)
+  console.log(`  - Environment: ${NODE_ENV}`)
+  console.log(`  - Allowed Origins: ${NODE_ENV === 'development' ? 'All origins (development mode)' : 'Production domains only'}`)
+  console.log(`  - Credentials: Enabled`)
+  console.log(`  - Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS`)
   console.log(`API endpoints:`)
   console.log(`  Timetables:`)
   console.log(`    POST   http://localhost:${PORT}/api/timetables`)
